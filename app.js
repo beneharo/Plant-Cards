@@ -1,6 +1,7 @@
+// Configuración y Estado
 let deck = [];
 let startX = 0;
-const BUFFER_SIZE = 5;
+let isFetching = false;
 
 const card = document.getElementById("card");
 const img = document.getElementById("plantImage");
@@ -8,86 +9,121 @@ const common = document.getElementById("commonName");
 const scientific = document.getElementById("scientificName");
 const button = document.getElementById("nextBtn");
 
-async function fetchCanarianPlant() {
-  const sparql = `
-    SELECT ?item ?itemLabel ?scientificName ?image WHERE {
-      ?item wdt:P31 wd:Q756; wdt:P131 wd:Q40188.
-      ?item wdt:P225 ?scientificName.
-      ?item wdt:P18 ?image.
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "es". }
-    } LIMIT 50
-  `;
-  const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
-  
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data.results?.bindings) return [];
-    
-    return data.results.bindings.map(b => ({
-      nombre_comun: b.itemLabel?.value || "Nombre desconocido",
-      nombre_cientifico: b.scientificName?.value || "N/A",
-      foto: b.image?.value.replace("http:", "https:")
-    }));
-  } catch (e) { 
-    console.error("Error en conexión:", e); 
-    return []; 
-  }
-}
+/**
+ * 1. Obtiene plantas de Wikidata. 
+ * Filtra por: Taxon de planta, ubicada en Canarias (recursivo), con imagen y nombre científico.
+ */
+async function fetchPlantsFromWikidata() {
+    if (isFetching) return [];
+    isFetching = true;
 
-async function ensureBuffer() {
-  if (deck.length === 0) {
-    const newPlants = await fetchCanarianPlant();
-    if (newPlants.length > 0) {
-      deck = [...newPlants.sort(() => Math.random() - 0.5)];
+    const sparql = `
+    SELECT DISTINCT ?item ?itemLabel ?sciName ?image WHERE {
+      ?item wdt:P31 wd:Q756 ;                 # Es una planta
+            wdt:P131* wd:Q40188 ;             # Ubicada en Islas Canarias (recursivo)
+            wdt:P225 ?sciName ;               # Tiene nombre científico
+            wdt:P18 ?image .                  # Tiene imagen
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
+    } LIMIT 150`;
+
+    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+
+    try {
+        const res = await fetch(url, { headers: { 'Accept': 'application/sparql-results+json' } });
+        const data = await res.json();
+        isFetching = false;
+        
+        // Mapeamos y mezclamos aleatoriamente
+        return data.results.bindings.map(b => ({
+            nombre_comun: b.itemLabel.value,
+            nombre_cientifico: b.sciName.value,
+            foto: b.image.value.replace("http://", "https://")
+        })).sort(() => Math.random() - 0.5);
+    } catch (e) {
+        console.error("Error en la API de Wikidata:", e);
+        isFetching = false;
+        return [];
     }
-  }
 }
 
+/**
+ * 2. Gestiona el mazo (deck) para que nunca esté vacío.
+ */
+async function getNextPlant() {
+    if (deck.length === 0) {
+        // Si el mazo está vacío, esperamos a que el fetch termine
+        common.textContent = "Buscando flora canaria...";
+        deck = await fetchPlantsFromWikidata();
+    }
+    
+    if (deck.length === 0) return null;
+
+    // Si quedan pocas plantas, cargamos más en segundo plano (background)
+    if (deck.length < 5 && !isFetching) {
+        fetchPlantsFromWikidata().then(newItems => {
+            deck = [...deck, ...newItems];
+        });
+    }
+
+    return deck.shift();
+}
+
+/**
+ * 3. Renderizado optimizado con pre-carga de imagen.
+ */
 async function loadPlant() {
-  // 1. Asegurar que tenemos datos
-  await ensureBuffer();
-  
-  // 2. Si después de intentar cargar, deck sigue vacío, salimos
-  if (deck.length === 0) {
-    console.warn("No se pudieron cargar datos de la API.");
-    return;
-  }
+    const plant = await getNextPlant();
 
-  const plant = deck.shift();
-  
-  // 3. Validación extra: asegurar que la planta tiene foto
-  if (!plant.foto) {
-    console.warn("Planta sin foto, saltando...");
-    loadPlant();
-    return;
-  }
+    if (!plant) {
+        common.textContent = "Error de conexión";
+        scientific.textContent = "Inténtalo de nuevo en unos segundos.";
+        return;
+    }
 
-  img.style.opacity = 0;
-  
-  const tempImg = new Image();
-  tempImg.src = plant.foto;
-  
-  tempImg.onload = () => {
-    img.src = plant.foto;
-    common.textContent = plant.nombre_comun;
-    scientific.textContent = plant.nombre_cientifico;
-    img.style.opacity = 1;
-  };
-  
-  tempImg.onerror = () => {
-    console.warn("Imagen rota, intentando siguiente...");
-    loadPlant();
-  };
-  
-  ensureBuffer();
+    // Efecto visual de carga
+    img.style.opacity = 0;
+
+    const tempImg = new Image();
+    tempImg.src = plant.foto;
+
+    // Solo actualizamos el DOM cuando la imagen esté lista en memoria
+    tempImg.onload = () => {
+        img.src = plant.foto;
+        common.textContent = plant.nombre_comun;
+        scientific.textContent = plant.nombre_cientifico;
+        
+        requestAnimationFrame(() => {
+            img.style.opacity = 1;
+        });
+        
+        card.classList.remove("flipped");
+    };
+
+    // Si la imagen falla (link roto en Commons), pasamos a la siguiente automáticamente
+    tempImg.onerror = () => {
+        console.warn("Imagen rota para:", plant.nombre_cientifico, "saltando...");
+        loadPlant();
+    };
 }
 
-// Eventos
+// 4. Controladores de Eventos (Fix startX y Swipe)
 button.addEventListener("click", loadPlant);
-card.addEventListener("pointerdown", e => startX = e.clientX);
+
+card.addEventListener("pointerdown", e => {
+    startX = e.clientX;
+});
+
 card.addEventListener("pointerup", e => {
-  if (startX - e.clientX > 100) loadPlant();
+    const endX = e.clientX;
+    const diff = startX - endX;
+
+    // Swipe de al menos 100px
+    if (Math.abs(diff) > 100) {
+        loadPlant();
+    } else {
+        // Si es un toque corto, giramos la carta
+        card.classList.toggle("flipped");
+    }
 });
 
 // Inicialización
