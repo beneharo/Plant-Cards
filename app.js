@@ -9,41 +9,47 @@ const scientific = document.getElementById("scientificName");
 
 let startX = 0;
 
-// 🔥 CARGA CSV (más robusto)
+// 🔥 CREAR BOTÓN "OTRA"
+const button = document.createElement("button");
+button.textContent = "Otra";
+button.style.marginTop = "12px";
+button.style.padding = "10px 18px";
+button.style.fontSize = "16px";
+button.style.borderRadius = "10px";
+button.style.border = "none";
+button.style.background = "#22c55e";
+button.style.color = "white";
+
+document.getElementById("game").appendChild(button);
+
+// 📦 CARGAR CSV
 fetch("plants.csv")
   .then(res => res.text())
   .then(text => {
     plants = parseCSV(text);
     nextPlant();
   })
-  .catch(err => {
-    console.error("Error cargando CSV:", err);
-  });
+  .catch(err => console.error("Error CSV:", err));
 
-/**
- * 🧠 Parser simple de CSV (sin librerías)
- */
 function parseCSV(text) {
   const lines = text.trim().split("\n").slice(1);
 
   return lines.map(line => {
-    const [foto, nombre_comun, nombre_cientifico] = line.split(",");
+    const [foto, nombre_comun, nombre_cientifico, familia] = line.split(",");
 
     return {
-      foto: foto.trim(),
-      nombre_comun: nombre_comun.trim(),
-      nombre_cientifico: nombre_cientifico.trim()
+      foto: foto?.trim(),
+      nombre_comun: nombre_comun?.trim(),
+      nombre_cientifico: nombre_cientifico?.trim(),
+      familia: familia?.trim()
     };
   });
 }
 
-/**
- * 🖼️ CARGAR PLANTA CON PRELOAD (clave)
- */
+// 🖼️ CARGA CON PRELOAD
 function loadPlant(plant) {
   const preImg = new Image();
 
-  // ocultar mientras carga
   img.style.opacity = 0;
 
   preImg.onload = () => {
@@ -51,7 +57,6 @@ function loadPlant(plant) {
     common.textContent = plant.nombre_comun;
     scientific.textContent = plant.nombre_cientifico;
 
-    // mostrar SOLO cuando está lista
     img.style.opacity = 1;
 
     card.classList.remove("flipped");
@@ -60,9 +65,7 @@ function loadPlant(plant) {
   preImg.src = plant.foto;
 }
 
-/**
- * 🔀 PLANTA ALEATORIA
- */
+// 🔀 NUEVA PLANTA
 function nextPlant() {
   if (!plants.length) return;
 
@@ -72,16 +75,12 @@ function nextPlant() {
   loadPlant(current);
 }
 
-/**
- * 👆 FLIP al tocar
- */
+// 👆 FLIP
 card.addEventListener("click", () => {
   card.classList.toggle("flipped");
 });
 
-/**
- * 👉 SWIPE DERECHO (pointer events = iOS OK)
- */
+// 👉 SWIPE (opcional, mejorado pero NO crítico)
 card.addEventListener("pointerdown", (e) => {
   startX = e.clientX;
 });
@@ -89,8 +88,14 @@ card.addEventListener("pointerdown", (e) => {
 card.addEventListener("pointerup", (e) => {
   const diff = e.clientX - startX;
 
-  // swipe derecha
-  if (diff > 80) {
+  if (diff > 100) {
     nextPlant();
   }
 });
+
+// 🔘 BOTÓN "OTRA" (la parte importante)
+button.addEventListener("click", () => {
+  nextPlant();
+});
+
+// 🚀 INIT
