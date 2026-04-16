@@ -43,21 +43,28 @@ function parseCSV(text) {
 function loadPlant(plant) {
   const preImg = new Image();
 
+  // fade out primero
   img.style.opacity = 0;
 
   preImg.onload = () => {
-    img.src = plant.foto;
-    common.textContent = plant.nombre_comun;
-    scientific.textContent = plant.nombre_cientifico;
+    // cuando ya está cargada → swap seguro
+    setTimeout(() => {
+      img.src = plant.foto;
+      common.textContent = plant.nombre_comun;
+      scientific.textContent = plant.nombre_cientifico;
 
-    img.style.opacity = 1;
+      // reset flip
+      card.classList.remove("flipped");
 
-    card.classList.remove("flipped");
+      // fade in
+      requestAnimationFrame(() => {
+        img.style.opacity = 1;
+      });
+    }, 80); // pequeño delay = elimina “jump”
   };
 
   preImg.src = plant.foto;
 }
-
 // 🔀 NUEVA PLANTA
 function nextPlant() {
   if (!plants.length) return;
