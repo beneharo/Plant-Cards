@@ -1,5 +1,5 @@
 let deck = [];
-let startX = 0; // 👈 RESTAURADA: Necesaria para el swipe
+let startX = 0;
 const BUFFER_SIZE = 5;
 
 const card = document.getElementById("card");
@@ -22,33 +22,47 @@ async function fetchCanarianPlant() {
   try {
     const res = await fetch(url);
     const data = await res.json();
+    if (!data.results?.bindings) return [];
+    
     return data.results.bindings.map(b => ({
-      nombre_comun: b.itemLabel.value,
-      nombre_cientifico: b.scientificName.value,
-      foto: b.image.value.replace("http:", "https:") 
+      nombre_comun: b.itemLabel?.value || "Nombre desconocido",
+      nombre_cientifico: b.scientificName?.value || "N/A",
+      foto: b.image?.value.replace("http:", "https:")
     }));
-  } catch (e) { console.error("Error fetching:", e); return []; }
+  } catch (e) { 
+    console.error("Error en conexión:", e); 
+    return []; 
+  }
 }
 
 async function ensureBuffer() {
-  if (deck.length < BUFFER_SIZE) {
+  if (deck.length === 0) {
     const newPlants = await fetchCanarianPlant();
-    // Mezclamos y añadimos al deck
-    deck = [...deck, ...newPlants.sort(() => Math.random() - 0.5)];
+    if (newPlants.length > 0) {
+      deck = [...newPlants.sort(() => Math.random() - 0.5)];
+    }
   }
 }
 
 async function loadPlant() {
+  // 1. Asegurar que tenemos datos
   await ensureBuffer();
   
-  // 🛡️ PROTECCIÓN: Si el deck sigue vacío, no intentamos acceder a propiedades
+  // 2. Si después de intentar cargar, deck sigue vacío, salimos
   if (deck.length === 0) {
-    console.warn("No hay plantas disponibles en el buffer.");
+    console.warn("No se pudieron cargar datos de la API.");
     return;
   }
 
   const plant = deck.shift();
   
+  // 3. Validación extra: asegurar que la planta tiene foto
+  if (!plant.foto) {
+    console.warn("Planta sin foto, saltando...");
+    loadPlant();
+    return;
+  }
+
   img.style.opacity = 0;
   
   const tempImg = new Image();
@@ -61,20 +75,19 @@ async function loadPlant() {
     img.style.opacity = 1;
   };
   
+  tempImg.onerror = () => {
+    console.warn("Imagen rota, intentando siguiente...");
+    loadPlant();
+  };
+  
   ensureBuffer();
 }
 
 // Eventos
 button.addEventListener("click", loadPlant);
-
-card.addEventListener("pointerdown", e => {
-  startX = e.clientX;
-});
-
+card.addEventListener("pointerdown", e => startX = e.clientX);
 card.addEventListener("pointerup", e => {
-  if (startX - e.clientX > 100) { // Swipe izquierda
-    loadPlant();
-  }
+  if (startX - e.clientX > 100) loadPlant();
 });
 
 // Inicialización
