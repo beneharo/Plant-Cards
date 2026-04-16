@@ -82,3 +82,7 @@ body {
 #nextBtn:active {
   transform: scale(0.97);
 }
+
+#plantImage {
+  transition: opacity 0.25s ease;
+}
