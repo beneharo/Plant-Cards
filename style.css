@@ -63,3 +63,22 @@ body {
   font-size: 14px;
   opacity: 0.7;
 }
+
+#nextBtn {
+  margin-top: 15px;
+  padding: 12px 20px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: none;
+  background: #22c55e;
+  color: white;
+  width: 80%;
+  max-width: 300px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#nextBtn:active {
+  transform: scale(0.97);
+}
