@@ -9,18 +9,11 @@ const scientific = document.getElementById("scientificName");
 
 let startX = 0;
 
-// 🔥 CREAR BOTÓN "OTRA"
-const button = document.createElement("button");
-button.textContent = "Otra";
-button.style.marginTop = "12px";
-button.style.padding = "10px 18px";
-button.style.fontSize = "16px";
-button.style.borderRadius = "10px";
-button.style.border = "none";
-button.style.background = "#22c55e";
-button.style.color = "white";
+const button = document.getElementById("nextBtn");
 
-document.getElementById("game").appendChild(button);
+button.addEventListener("click", () => {
+  nextPlant();
+});
 
 // 📦 CARGAR CSV
 fetch("plants.csv")
