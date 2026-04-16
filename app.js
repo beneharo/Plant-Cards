@@ -1,55 +1,39 @@
-let plants = [];
-let current = null;
+// Improved swipe detection logic
 
-const card = document.getElementById("card");
-const img = document.getElementById("plantImage");
-const common = document.getElementById("commonName");
-const scientific = document.getElementById("scientificName");
+let touchstartX = 0;
+let touchstartY = 0;
+let touchendX = 0;
+let touchendY = 0;
 
-// Cargar CSV
-fetch("plantas.csv")
-  .then(res => res.text())
-  .then(text => {
-    const rows = text.trim().split("\n").slice(1);
-    plants = rows.map(r => {
-      const [foto, nombre_comun, nombre_cientifico] = r.split(",");
-      return { foto, nombre_comun, nombre_cientifico };
-    });
+const gestureZone = document.getElementById('gesture-zone'); // Assume this is your swipe area
 
-    showRandom();
-  });
+gestureZone.addEventListener('touchstart', (event) => {
+    touchstartX = event.changedTouches[0].screenX;
+    touchstartY = event.changedTouches[0].screenY;
+}, false);
 
-function showRandom() {
-  const index = Math.floor(Math.random() * plants.length);
-  current = plants[index];
+gestureZone.addEventListener('touchend', (event) => {
+    touchendX = event.changedTouches[0].screenX;
+    touchendY = event.changedTouches[0].screenY;
+    handleGesture();
+}, false);
 
-  // Esperar a que la imagen se cargue completamente
-  img.onload = () => {
-    common.textContent = current.nombre_comun;
-    scientific.textContent = current.nombre_cientifico;
-    card.classList.remove("flipped");
-  };
+function handleGesture() {
+    const diffX = touchendX - touchstartX;
+    const diffY = touchendY - touchstartY;
 
-  img.src = current.foto;
+    // Check if movement is horizontal and significant enough
+    if (Math.abs(diffX) > Math.abs(diffY) && diffX > 80) {
+        console.log('Swipe right detected!');
+        // Handle right swipe logic
+    } else if (Math.abs(diffX) > Math.abs(diffY) && diffX < -80) {
+        console.log('Swipe left detected!');
+        // Handle left swipe logic
+    }
+    // Add else if for vertical swipes if needed
 }
 
-// Flip al tocar
-card.addEventListener("click", () => {
-  card.classList.toggle("flipped");
-});
-
-// Swipe detection
-let startX = 0;
-
-card.addEventListener("touchstart", e => {
-  startX = e.touches[0].clientX;
-});
-
-card.addEventListener("touchend", e => {
-  let endX = e.changedTouches[0].clientX;
-
-  if (endX - startX > 80) {
-    // swipe derecha
-    showRandom();
-  }
-});
+// Prevent default behavior on swipe
+gestureZone.addEventListener('touchmove', function(event) {
+    event.preventDefault();
+}, { passive: false });
