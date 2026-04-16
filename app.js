@@ -30,6 +30,29 @@ fetch("plants.csv")
     showPlant();
   });
 
+async function fetchFallbackImage(query) {
+  try {
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&prop=imageinfo&iiprop=url`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const pages = data?.query?.pages;
+    if (!pages) return null;
+
+    for (let key in pages) {
+      const page = pages[key];
+      const img = page?.imageinfo?.[0]?.url;
+      if (img) return img;
+    }
+
+    return null;
+  } catch (e) {
+    console.error("Fallback error:", e);
+    return null;
+  }
+};
+
 // ⚡ CSV parser ultra ligero
 function parseCSV(text) {
   const lines = text.split("\n");
@@ -93,25 +116,49 @@ function showPlant() {
 }
 
 // 🖼️ carga optimizada
-function loadPlant(plant) {
-  const url = plant.foto;
+async function loadPlant(plant) {
+  let url = plant.foto;
 
   img.style.opacity = 0;
 
-  const cached = imageCache.get(url);
+  const tryLoad = (src) => {
+    return new Promise((resolve, reject) => {
+      const temp = new Image();
 
-  if (cached && cached.complete) {
-    applyPlant(plant);
-  } else {
-    const temp = new Image();
+      temp.onload = () => resolve(src);
+      temp.onerror = () => reject(src);
 
-    temp.onload = () => {
-      imageCache.set(url, temp);
-      applyPlant(plant);
-    };
+      temp.src = src;
+    });
+  };
 
-    temp.src = url;
+  try {
+    await tryLoad(url);
+  } catch {
+    console.warn("Imagen rota, buscando fallback...");
+
+    const fallback = await fetchFallbackImage(plant.nombre_cientifico || plant.nombre_comun);
+
+    if (fallback) {
+      url = fallback;
+    }
   }
+
+  const finalImg = new Image();
+
+  finalImg.onload = () => {
+    img.src = url;
+    common.textContent = plant.nombre_comun;
+    scientific.textContent = plant.nombre_cientifico;
+
+    requestAnimationFrame(() => {
+      img.style.opacity = 1;
+    });
+
+    card.classList.remove("flipped");
+  };
+
+  finalImg.src = url;
 }
 
 // 🧠 render mínimo (evita reflows)
