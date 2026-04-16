@@ -1,8 +1,11 @@
-// Configuración y Estado
+/**
+ * ESTADO GLOBAL
+ */
 let deck = [];
 let startX = 0;
-let isFetching = false;
+let isLoading = false;
 
+// Referencias al DOM
 const card = document.getElementById("card");
 const img = document.getElementById("plantImage");
 const common = document.getElementById("commonName");
@@ -10,104 +13,94 @@ const scientific = document.getElementById("scientificName");
 const button = document.getElementById("nextBtn");
 
 /**
- * 1. Obtiene plantas de Wikidata. 
- * Filtra por: Taxon de planta, ubicada en Canarias (recursivo), con imagen y nombre científico.
+ * 1. BUSCAR DATOS EN WIKIDATA
+ * Trae plantas que tengan imagen y estén en Canarias.
  */
-async function fetchPlantsFromWikidata() {
-    if (isFetching) return [];
-    isFetching = true;
+async function fetchPlants() {
+    if (isLoading) return;
+    isLoading = true;
+    
+    // Cambiamos el texto para dar feedback al usuario
+    common.textContent = "Buscando en el monte...";
+    scientific.textContent = "Conectando con Wikidata...";
 
     const sparql = `
     SELECT DISTINCT ?item ?itemLabel ?sciName ?image WHERE {
-      ?item wdt:P31 wd:Q756 ;                 # Es una planta
-            wdt:P131* wd:Q40188 ;             # Ubicada en Islas Canarias (recursivo)
-            wdt:P225 ?sciName ;               # Tiene nombre científico
-            wdt:P18 ?image .                  # Tiene imagen
+      ?item wdt:P31 wd:Q756 .                # Es una planta
+      ?item wdt:P131* wd:Q40188 .            # En Islas Canarias
+      ?item wdt:P225 ?sciName .              # Nombre científico
+      ?item wdt:P18 ?image .                 # Tiene foto
       SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
-    } LIMIT 150`;
+    } LIMIT 100`;
 
     const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
 
     try {
-        const res = await fetch(url, { headers: { 'Accept': 'application/sparql-results+json' } });
-        const data = await res.json();
-        isFetching = false;
-        
-        // Mapeamos y mezclamos aleatoriamente
-        return data.results.bindings.map(b => ({
+        const response = await fetch(url);
+        const data = await response.json();
+        const results = data.results.bindings;
+
+        if (results.length === 0) throw new Error("No se encontraron plantas");
+
+        // Mezclamos los resultados aleatoriamente
+        deck = results.map(b => ({
             nombre_comun: b.itemLabel.value,
             nombre_cientifico: b.sciName.value,
             foto: b.image.value.replace("http://", "https://")
         })).sort(() => Math.random() - 0.5);
-    } catch (e) {
-        console.error("Error en la API de Wikidata:", e);
-        isFetching = false;
-        return [];
-    }
-}
 
-/**
- * 2. Gestiona el mazo (deck) para que nunca esté vacío.
- */
-async function getNextPlant() {
-    if (deck.length === 0) {
-        // Si el mazo está vacío, esperamos a que el fetch termine
-        common.textContent = "Buscando flora canaria...";
-        deck = await fetchPlantsFromWikidata();
-    }
-    
-    if (deck.length === 0) return null;
+        isLoading = false;
+        renderNextPlant(); // Una vez cargado, mostramos la primera
 
-    // Si quedan pocas plantas, cargamos más en segundo plano (background)
-    if (deck.length < 5 && !isFetching) {
-        fetchPlantsFromWikidata().then(newItems => {
-            deck = [...deck, ...newItems];
-        });
-    }
-
-    return deck.shift();
-}
-
-/**
- * 3. Renderizado optimizado con pre-carga de imagen.
- */
-async function loadPlant() {
-    const plant = await getNextPlant();
-
-    if (!plant) {
+    } catch (error) {
+        console.error("Fallo en la API:", error);
         common.textContent = "Error de conexión";
-        scientific.textContent = "Inténtalo de nuevo en unos segundos.";
+        scientific.textContent = "Reintentando en 3 segundos...";
+        isLoading = false;
+        setTimeout(fetchPlants, 3000);
+    }
+}
+
+/**
+ * 2. MOSTRAR LA SIGUIENTE PLANTA
+ */
+function renderNextPlant() {
+    if (deck.length === 0) {
+        fetchPlants();
         return;
     }
 
-    // Efecto visual de carga
+    const plant = deck.shift();
+
+    // Iniciamos transición de salida
     img.style.opacity = 0;
 
+    // Pre-carga de imagen para evitar parpadeos
     const tempImg = new Image();
     tempImg.src = plant.foto;
 
-    // Solo actualizamos el DOM cuando la imagen esté lista en memoria
     tempImg.onload = () => {
         img.src = plant.foto;
         common.textContent = plant.nombre_comun;
         scientific.textContent = plant.nombre_cientifico;
         
+        // Animación de entrada
         requestAnimationFrame(() => {
             img.style.opacity = 1;
         });
-        
         card.classList.remove("flipped");
     };
 
-    // Si la imagen falla (link roto en Commons), pasamos a la siguiente automáticamente
     tempImg.onerror = () => {
-        console.warn("Imagen rota para:", plant.nombre_cientifico, "saltando...");
-        loadPlant();
+        console.warn("Imagen no disponible, saltando...");
+        renderNextPlant();
     };
 }
 
-// 4. Controladores de Eventos (Fix startX y Swipe)
-button.addEventListener("click", loadPlant);
+/**
+ * 3. EVENTOS (Botón y Swipe)
+ */
+button.addEventListener("click", renderNextPlant);
 
 card.addEventListener("pointerdown", e => {
     startX = e.clientX;
@@ -117,14 +110,12 @@ card.addEventListener("pointerup", e => {
     const endX = e.clientX;
     const diff = startX - endX;
 
-    // Swipe de al menos 100px
-    if (Math.abs(diff) > 100) {
-        loadPlant();
+    if (Math.abs(diff) > 50) { // Umbral de swipe 50px
+        renderNextPlant();
     } else {
-        // Si es un toque corto, giramos la carta
         card.classList.toggle("flipped");
     }
 });
 
-// Inicialización
-loadPlant();
+// 4. ARRANCAR LA APP
+fetchPlants();
