@@ -23,11 +23,14 @@ function showRandom() {
   const index = Math.floor(Math.random() * plants.length);
   current = plants[index];
 
-  img.src = current.foto;
-  common.textContent = current.nombre_comun;
-  scientific.textContent = current.nombre_cientifico;
+  // Esperar a que la imagen se cargue completamente
+  img.onload = () => {
+    common.textContent = current.nombre_comun;
+    scientific.textContent = current.nombre_cientifico;
+    card.classList.remove("flipped");
+  };
 
-  card.classList.remove("flipped");
+  img.src = current.foto;
 }
 
 // Flip al tocar
@@ -45,7 +48,7 @@ card.addEventListener("touchstart", e => {
 card.addEventListener("touchend", e => {
   let endX = e.changedTouches[0].clientX;
 
-  if (startX - endX < -80) {
+  if (endX - startX > 80) {
     // swipe derecha
     showRandom();
   }
