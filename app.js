@@ -1,39 +1,96 @@
-// Improved swipe detection logic
+let plants = [];
+let current = null;
 
-let touchstartX = 0;
-let touchstartY = 0;
-let touchendX = 0;
-let touchendY = 0;
+// ELEMENTOS
+const card = document.getElementById("card");
+const img = document.getElementById("plantImage");
+const common = document.getElementById("commonName");
+const scientific = document.getElementById("scientificName");
 
-const gestureZone = document.getElementById('gesture-zone'); // Assume this is your swipe area
+let startX = 0;
 
-gestureZone.addEventListener('touchstart', (event) => {
-    touchstartX = event.changedTouches[0].screenX;
-    touchstartY = event.changedTouches[0].screenY;
-}, false);
+// 🔥 CARGA CSV (más robusto)
+fetch("plants.csv")
+  .then(res => res.text())
+  .then(text => {
+    plants = parseCSV(text);
+    nextPlant();
+  })
+  .catch(err => {
+    console.error("Error cargando CSV:", err);
+  });
 
-gestureZone.addEventListener('touchend', (event) => {
-    touchendX = event.changedTouches[0].screenX;
-    touchendY = event.changedTouches[0].screenY;
-    handleGesture();
-}, false);
+/**
+ * 🧠 Parser simple de CSV (sin librerías)
+ */
+function parseCSV(text) {
+  const lines = text.trim().split("\n").slice(1);
 
-function handleGesture() {
-    const diffX = touchendX - touchstartX;
-    const diffY = touchendY - touchstartY;
+  return lines.map(line => {
+    const [foto, nombre_comun, nombre_cientifico] = line.split(",");
 
-    // Check if movement is horizontal and significant enough
-    if (Math.abs(diffX) > Math.abs(diffY) && diffX > 80) {
-        console.log('Swipe right detected!');
-        // Handle right swipe logic
-    } else if (Math.abs(diffX) > Math.abs(diffY) && diffX < -80) {
-        console.log('Swipe left detected!');
-        // Handle left swipe logic
-    }
-    // Add else if for vertical swipes if needed
+    return {
+      foto: foto.trim(),
+      nombre_comun: nombre_comun.trim(),
+      nombre_cientifico: nombre_cientifico.trim()
+    };
+  });
 }
 
-// Prevent default behavior on swipe
-gestureZone.addEventListener('touchmove', function(event) {
-    event.preventDefault();
-}, { passive: false });
+/**
+ * 🖼️ CARGAR PLANTA CON PRELOAD (clave)
+ */
+function loadPlant(plant) {
+  const preImg = new Image();
+
+  // ocultar mientras carga
+  img.style.opacity = 0;
+
+  preImg.onload = () => {
+    img.src = plant.foto;
+    common.textContent = plant.nombre_comun;
+    scientific.textContent = plant.nombre_cientifico;
+
+    // mostrar SOLO cuando está lista
+    img.style.opacity = 1;
+
+    card.classList.remove("flipped");
+  };
+
+  preImg.src = plant.foto;
+}
+
+/**
+ * 🔀 PLANTA ALEATORIA
+ */
+function nextPlant() {
+  if (!plants.length) return;
+
+  const index = Math.floor(Math.random() * plants.length);
+  current = plants[index];
+
+  loadPlant(current);
+}
+
+/**
+ * 👆 FLIP al tocar
+ */
+card.addEventListener("click", () => {
+  card.classList.toggle("flipped");
+});
+
+/**
+ * 👉 SWIPE DERECHO (pointer events = iOS OK)
+ */
+card.addEventListener("pointerdown", (e) => {
+  startX = e.clientX;
+});
+
+card.addEventListener("pointerup", (e) => {
+  const diff = e.clientX - startX;
+
+  // swipe derecha
+  if (diff > 80) {
+    nextPlant();
+  }
+});
